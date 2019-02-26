@@ -1,0 +1,162 @@
+---
+title: 'Problem Set #4'
+author: "Ruoqi Zhang"
+date: "2/23/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(tidyverse)
+library(readxl)
+library(lubridate)
+library(ggridges)
+library(janitor)
+library(stringr)
+library(gt)
+library(scales)
+```
+
+```{r data_preparation, echo=FALSE, message=FALSE}
+poll <- read_csv("ps_4_elections-poll-nc09-3.csv")
+
+# poll_clean <- poll_original %>% 
+#   anti_join(filter_all(poll_original, any_vars(str_detect(., pattern = "DO NOT READ"))))
+# 
+#
+# poll_invalid <- poll_original %>% 
+#   filter_all(any_vars(str_detect(., pattern = "DO NOT READ")))
+# poll_clean <- anti_join(poll_original, poll_invalid)
+# 
+# poll_clean <- poll_original[!(poll_original$timestamp %in% poll_invalid$timestamp),]
+# 
+# poll_clean <- poll_original %>% 
+#   filter_all(any_vars(str_detect(., pattern = "DO NOT READ"))) %>% 
+#   anti_join(poll_original)
+#   
+#   
+#   filter_all(all_vars(!grepl('[DO NOT READ]',.)))
+# 
+# poll_clean <- poll_original %>% 
+#   filter(poll)
+
+```
+
+# Question 1
+
+```{r q1_1, echo=FALSE}
+ans_q1_1 <- poll %>% 
+  filter(response=="Dem") %>% 
+  count()
+```
+
+There were `r ans_q1_1` respondents who supported the Democratic candidate.
+
+```{r q1_2, echo=FALSE}
+rep_num <- poll %>% 
+  filter(response == "Rep") %>% 
+  count()
+
+und_num <- poll %>% 
+  filter(response %in% c('Und')) %>% 
+  count()
+
+ans_q1_2 <- rep_num - und_num 
+```
+
+There were `r ans_q1_2` more respondents who favored the Republican candidate than who were Undecided.
+
+```{r q1_3, echo=FALSE}
+ans_q1_3 <- poll %>% 
+  filter(gender != gender_combined) %>% 
+  count()
+```
+
+There are two gender variables (`gender` and `gender_combined`). There are `r ans_q1_3` individuals for whom these variables have different values.
+
+```{r q1_4, echo=FALSE}
+ans_q1_4 <- poll %>% 
+  filter(race_eth == "White",
+         race_eth != file_race_black) %>% 
+  count()
+```
+
+There are `r ans_q1_4` respondents listed as “White” under `race_eth` who are not listed as “White” under `file_race_black`.
+
+```{r q1_5, echo=FALSE}
+rep_earliest <- poll %>% 
+  filter(response == "Rep") %>% 
+  arrange(timestamp) %>% 
+  slice(1) %>% 
+  select(timestamp)
+
+dem_earliest <- poll %>% 
+  filter(response == "Dem") %>% 
+  arrange(timestamp) %>% 
+  slice(1) %>% 
+  select(timestamp)
+
+ans_q1_5 <- round(as.numeric(dem_earliest - rep_earliest))
+
+```
+
+The first response of Rep came `r ans_q1_5` minutes (rounded to the nearest minute) before the first `response` of Dem.
+
+# Question 2
+
+```{r table, echo=FALSE}
+
+## TODO: Replace the undecided cell into "-"
+
+poll %>% 
+  filter(race_eth != "[DO NOT READ] Don't know/Refused") %>% 
+  select(response, race_eth, final_weight) %>% 
+  group_by(response, race_eth) %>% 
+  summarize(total = sum(final_weight)) %>% 
+  spread(key = response, value = total) %>% 
+  mutate_all(list(~replace_na(.,0))) %>% 
+  mutate(total_weight = Dem + Rep + Und + `3`) %>% 
+  mutate_all(list(~na_if(.,0))) %>% 
+  mutate(Dem = percent(Dem/total_weight, 1),
+         Rep = percent(Rep/total_weight, 1),
+         Und = percent(Und/total_weight, 1)) %>% 
+  select(race_eth, Dem, Rep, Und) %>% 
+  mutate(race_eth = factor(race_eth, levels = c("White", "Black", "Hispanic", "Asian", "Other"))) %>% 
+  arrange(race_eth) %>% 
+  mutate_all(list(~str_replace(.,"NA%","-"))) %>% 
+  gt() %>% 
+  tab_header(
+    title = "Polling results in North Carolina 9th Congressional District"
+  ) %>% 
+  tab_stubhead_label(label = "race_eth") %>% 
+  cols_label(
+    race_eth = "Race/Ethnicity",
+    Dem = "DEM.",
+    Rep = "REP.",
+    Und = "UND."
+  ) %>% 
+  tab_source_note(
+    source_note = "Source: New York Times Upshot/Siena College 2018 live polls"
+  )
+
+```
+
+# Question 3
+
+```{r q3, echo=FALSE}
+poll %>% 
+  filter(educ != "[DO NOT READ] Refused") %>% 
+  select(educ, final_weight) %>% 
+  ggplot(aes(x=educ, y=final_weight)) + 
+    geom_violin() + 
+    geom_jitter(alpha = 0.25, width = 0.25) + 
+    coord_flip() +
+    labs(title = "More Educated Matter Less in North Carolina 9th",
+           subtitle = "Poll gives more weight to people who are less likely to participate in polls",
+           y = "Weight Given to Respondent in Calculating Poll Results",
+           caption = "New York Times Upshot/Siena College 2018 live polls")
+```
+
+# Collaborators
+Neil Khruana
