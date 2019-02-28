@@ -19,27 +19,8 @@ library(scales)
 ```
 
 ```{r data_preparation, echo=FALSE, message=FALSE}
+## Import polling data from given file. Upon examination of the file through glimpse and tail, the dataset is already cleaned.
 poll <- read_csv("ps_4_elections-poll-nc09-3.csv")
-
-# poll_clean <- poll_original %>% 
-#   anti_join(filter_all(poll_original, any_vars(str_detect(., pattern = "DO NOT READ"))))
-# 
-#
-# poll_invalid <- poll_original %>% 
-#   filter_all(any_vars(str_detect(., pattern = "DO NOT READ")))
-# poll_clean <- anti_join(poll_original, poll_invalid)
-# 
-# poll_clean <- poll_original[!(poll_original$timestamp %in% poll_invalid$timestamp),]
-# 
-# poll_clean <- poll_original %>% 
-#   filter_all(any_vars(str_detect(., pattern = "DO NOT READ"))) %>% 
-#   anti_join(poll_original)
-#   
-#   
-#   filter_all(all_vars(!grepl('[DO NOT READ]',.)))
-# 
-# poll_clean <- poll_original %>% 
-#   filter(poll)
 
 ```
 
@@ -47,8 +28,8 @@ poll <- read_csv("ps_4_elections-poll-nc09-3.csv")
 
 ```{r q1_1, echo=FALSE}
 ans_q1_1 <- poll %>% 
-  filter(response=="Dem") %>% 
-  count()
+  filter(response=="Dem") %>% # Filter the rows in which variable response equals to Dem.
+  count() # Count the number of filtered rows, yielding the number of people who supported Democratic candidate.
 ```
 
 There were `r ans_q1_1` respondents who supported the Democratic candidate.
@@ -56,20 +37,20 @@ There were `r ans_q1_1` respondents who supported the Democratic candidate.
 ```{r q1_2, echo=FALSE}
 rep_num <- poll %>% 
   filter(response == "Rep") %>% 
-  count()
+  count() # Count the number of people who supported Republican candidate, and put it into a variable called rep_num, which stores this number.
 
 und_num <- poll %>% 
-  filter(response %in% c('Und')) %>% 
-  count()
+  filter(response == 'Und') %>% 
+  count() # Do the same for people who said that they're undecided.
 
-ans_q1_2 <- rep_num - und_num 
+ans_q1_2 <- rep_num - und_num # Subtract the number and we have the answer.
 ```
 
 There were `r ans_q1_2` more respondents who favored the Republican candidate than who were Undecided.
 
 ```{r q1_3, echo=FALSE}
 ans_q1_3 <- poll %>% 
-  filter(gender != gender_combined) %>% 
+  filter(gender != gender_combined) %>% # By invoking unique function on gender and gender_combined, we know that the way they specify gender is uniform. Therefore, using filter, we find the cases where the value of variable gender and gender_combined are not the same.
   count()
 ```
 
@@ -78,7 +59,7 @@ There are two gender variables (`gender` and `gender_combined`). There are `r an
 ```{r q1_4, echo=FALSE}
 ans_q1_4 <- poll %>% 
   filter(race_eth == "White",
-         race_eth != file_race_black) %>% 
+         race_eth != file_race_black) %>% # We first find the respondent whose race_eth is White, then we find the respondent (already all White), whose file_race_black is listed as non-white.
   count()
 ```
 
@@ -87,9 +68,9 @@ There are `r ans_q1_4` respondents listed as “White” under `race_eth` who ar
 ```{r q1_5, echo=FALSE}
 rep_earliest <- poll %>% 
   filter(response == "Rep") %>% 
-  arrange(timestamp) %>% 
-  slice(1) %>% 
-  select(timestamp)
+  arrange(timestamp) %>% # Rank the timestamp. 
+  slice(1) %>% # Take the first row.
+  select(timestamp) # Select the timestamp of the first row
 
 dem_earliest <- poll %>% 
   filter(response == "Dem") %>% 
@@ -97,7 +78,7 @@ dem_earliest <- poll %>%
   slice(1) %>% 
   select(timestamp)
 
-ans_q1_5 <- round(as.numeric(rep_earliest - dem_earliest))
+ans_q1_5 <- round(as.numeric(rep_earliest - dem_earliest)) # We first subtract rep_earliest and dem_earliest, two datetime objects, the subtraction of which yields time object. We then convert the time object into numeric object, and then use round function to round the number to the closest minute.
 
 ```
 
@@ -107,25 +88,36 @@ The first response of Rep came `r ans_q1_5` minutes (rounded to the nearest minu
 
 ```{r table, echo=FALSE}
 
-## TODO: Replace the undecided cell into "-"
-
 poll %>% 
-  filter(race_eth != "[DO NOT READ] Don't know/Refused") %>% 
+  # Filter out problematic response from race_eth variables.
+  filter(race_eth != "[DO NOT READ] Don't know/Refused") %>%
+  # Select only the relevant variables to make things easier.
   select(response, race_eth, final_weight) %>% 
   group_by(response, race_eth) %>% 
+  # For each combination of response and race_eth, we sum over all the final_weight of all rows that falls into the group.
   summarize(total = sum(final_weight)) %>% 
+  # We now get a tidy table, however, we need to spread this table to show our result. We use response (the choice of the respondent), as the column name for the spreaded table, and populate the corresponding cells with corresponding values.
   spread(key = response, value = total) %>% 
+  # Because there are NA in the spreaded data. We replace all NA by 0 to avoid computational errors caused by calculation with NA.
   mutate_all(list(~replace_na(.,0))) %>% 
+  # The total weight of the respondents with each race_eth.
   mutate(total_weight = Dem + Rep + Und + `3`) %>% 
+  # Upon examination of the final data, we learned that only undecided Asians have 0%. This is because of the previous NA data, which is a result of there being no surveyed Asian choose undecided. To preserve this subtlety, we change this cell back to NA. 
   mutate_all(list(~na_if(.,0))) %>% 
+  # Calculate the percentage
   mutate(Dem = percent(Dem/total_weight, 1),
          Rep = percent(Rep/total_weight, 1),
          Und = percent(Und/total_weight, 1)) %>% 
+  # Select the columns we want to present
   select(race_eth, Dem, Rep, Und) %>% 
+  # Turn race_eth into a factor and assign each value to levels in order to change the sequence of the rows.
   mutate(race_eth = factor(race_eth, levels = c("White", "Black", "Hispanic", "Asian", "Other"))) %>% 
+  # Arrange the factors according to the levels just assigned.
   arrange(race_eth) %>% 
+  # After the calculation of percentage, Asian Undecided is transformed into NA%, and we wish to replace that with "-"
   mutate_all(list(~str_replace(.,"NA%","-"))) %>% 
   gt() %>% 
+  # Adding labels for the table.
   tab_header(
     title = "Polling results in North Carolina 9th Congressional District"
   ) %>% 
@@ -146,47 +138,56 @@ poll %>%
 
 ```{r q3, echo=FALSE}
 poll %>% 
-  filter(educ != "[DO NOT READ] Refused") %>% 
-  select(educ, final_weight) %>% 
+  filter(educ != "[DO NOT READ] Refused") %>% # Filter out invalid responses from educ.
+  select(educ, final_weight) %>% # Select relevant variables to make things easier to read.
   mutate(educ = factor(educ, levels = c("Grade school", "High school",
                                         "Some college or trade school", "Bachelors' degree",
                                         "Graduate or Professional Degree"))) %>% 
-  arrange(educ) %>% 
+  arrange(educ) %>% # Change educ into a factor and assign level to change the sequence of how these education levels are presented on the final graph.
   ggplot(aes(x=educ, y=final_weight)) + 
     geom_violin() + 
-    geom_jitter(alpha = 0.25, width = 0.25) + 
-    coord_flip() +
+    geom_jitter(alpha = 0.25, width = 0.25) + # Create jitter graph. To better demonstrate the density of the jitters, we change its alpha value. 
+    coord_flip() + # Because the length of x variables, we flip the coordinate.
     labs(title = "More Educated Matter Less in North Carolina 9th",
            subtitle = "Poll gives more weight to people who are less likely to participate in polls",
-         x = NULL,
+         x = NULL, # We do not need an x label here since it's already obvious.
          y = "Weight Given to Respondent in Calculating Poll Results",
-           caption = "New York Times Upshot/Siena College 2018 live polls")
+           caption = "Source: New York Times Upshot/Siena College 2018 live polls")
 ```
 
 # Question 4
 
 ```{r q4, echo=FALSE}
+
+## In this question, I hope to compare the percentage of respondent with either Democratic or Republican Party as their registered party (file_party) who have voted for the candidate of other parties (For example, a Republican voter voted for Democratic candidate or for Third Party candidate) across education level.
+
+
+## In weighted all, we calculate the total weight of each combination of education level, party registration, and choice of candidate.
 weighted_all <- poll %>% 
-  filter(educ != "[DO NOT READ] Refused") %>% 
-  select(response, educ, file_party, final_weight) %>% 
+  filter(educ != "[DO NOT READ] Refused") %>% # Through unique function, we know that only educ has invalid values. We filterout those invalid rows.
+  select(response, educ, file_party, final_weight) %>% # Select only used columns to make reading things easier.
   group_by(educ, file_party, response) %>% 
   summarize(total_weight = sum(final_weight)) %>% 
-  spread(key = response, value = total_weight) %>% 
-  mutate_at(vars(-group_cols()),list(~replace_na(.,0))) %>% 
-  mutate(total_weight = `3` + Dem + Rep + Und)
+  spread(key = response, value = total_weight) %>% # We spread the table so that each type of response would constitute a column.
+  mutate_at(vars(-group_cols()),list(~replace_na(.,0))) %>% # Replace all NA value with 0 to not create calculation problems going on.
+  mutate(total_weight = `3` + Dem + Rep + Und) # Calculate the total weight of respondents in each group.
+
+# Because the issue with column name, we create separate dataframe for democrats and republicans, which we would merge later and create plot with.
   
 dem_change <- weighted_all %>% 
-  filter(file_party == "Democratic") %>% 
-  mutate(changed_weight = `3` + Rep) %>% 
+  filter(file_party == "Democratic") %>% # Filter only registered democratic voters
+  mutate(changed_weight = `3` + Rep) %>% # Calculate the weight of those voters which does not vote for the democratic candidate.
   select(educ, file_party, total_weight, changed_weight) %>% 
-  mutate(changed_portion = changed_weight/total_weight)
+  mutate(changed_portion = changed_weight/total_weight) # Calculate the percentage
 
+## We're doing the same thing here for the Republicans.
 rep_change <- weighted_all %>% 
   filter(file_party == "Republican") %>% 
   mutate(changed_weight = `3` + Dem) %>% 
   select(educ, file_party, total_weight, changed_weight) %>% 
   mutate(changed_portion = changed_weight/total_weight)
 
+## This is to prepare for the labels in the ggplot later.
 dat_text <- data.frame(
   label = "No Republican respondent\nonly attended Grade School.",
   file_party = "Republican",
@@ -194,22 +195,24 @@ dat_text <- data.frame(
   y = 0
 )
 
-bind_rows(dem_change, rep_change) %>% 
+
+bind_rows(dem_change, rep_change) %>% # Bind democrats and republican cases together.
   select(educ, file_party, changed_portion) %>% 
-  ungroup() %>% 
-  mutate(educ = factor(educ, levels = c("Grade school", "High school", "Some college or trade school", "Bachelors' degree", "Graduate or Professional Degree"))) %>% 
+  ungroup() %>%
+  mutate(educ = factor(educ, levels = c("Grade school", "High school", "Some college or trade school", "Bachelors' degree", "Graduate or Professional Degree"))) %>% # Factor and add level to arrange the sequence those discrete values are displayed.
   ggplot(aes(x = educ, y = changed_portion, fill = file_party)) +
     geom_col() +
     scale_fill_manual(values = c("blue", "red"),
-                      breaks = c("Democratic", "Republican")) +
-    coord_flip() +
-    facet_grid(~ file_party) +
+                      breaks = c("Democratic", "Republican")) + # Manually assign colors.
+    coord_flip() + # Flip coordinate so that education level can be seen more clearly
+    facet_grid(~ file_party) + # Use facet grid because it introduces more clarity, and makes guide unnecessary.
     labs(x = NULL,
          y = "Percentage",
          title = "Portion of Party Members Not Voting for Their Own Party",
-         caption = "New York Times Upshot/Siena College 2018 live polls") +
+         subtitle = "In North Carolina 9th Congressional District",
+         caption = "Source: New York Times Upshot/Siena College 2018 live polls") +
     guides(fill = FALSE) +
-    geom_text(data = dat_text, mapping = aes(x = x, y = y, label = label, hjust = 0))
+    geom_text(data = dat_text, mapping = aes(x = x, y = y, label = label, hjust = 0)) # Because there is no Republican respondent who only receives Grade school level education, we need to add an annotation here to distinguish it from the case of democrats.
 
 ```
 
