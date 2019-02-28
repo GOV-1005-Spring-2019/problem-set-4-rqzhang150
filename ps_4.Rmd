@@ -97,11 +97,11 @@ dem_earliest <- poll %>%
   slice(1) %>% 
   select(timestamp)
 
-ans_q1_5 <- round(as.numeric(dem_earliest - rep_earliest))
+ans_q1_5 <- round(as.numeric(rep_earliest - dem_earliest))
 
 ```
 
-The first response of Rep came `r ans_q1_5` minutes (rounded to the nearest minute) before the first `response` of Dem.
+The first response of Rep came `r ans_q1_5` minutes (rounded to the nearest minute) after the first `response` of Dem.
 
 # Question 2
 
@@ -165,5 +165,54 @@ poll %>%
 
 # Question 4
 
+```{r q4, echo=FALSE}
+weighted_all <- poll %>% 
+  filter(educ != "[DO NOT READ] Refused") %>% 
+  select(response, educ, file_party, final_weight) %>% 
+  group_by(educ, file_party, response) %>% 
+  summarize(total_weight = sum(final_weight)) %>% 
+  spread(key = response, value = total_weight) %>% 
+  mutate_at(vars(-group_cols()),list(~replace_na(.,0))) %>% 
+  mutate(total_weight = `3` + Dem + Rep + Und)
+  
+dem_change <- weighted_all %>% 
+  filter(file_party == "Democratic") %>% 
+  mutate(changed_weight = `3` + Rep) %>% 
+  select(educ, file_party, total_weight, changed_weight) %>% 
+  mutate(changed_portion = changed_weight/total_weight)
+
+rep_change <- weighted_all %>% 
+  filter(file_party == "Republican") %>% 
+  mutate(changed_weight = `3` + Dem) %>% 
+  select(educ, file_party, total_weight, changed_weight) %>% 
+  mutate(changed_portion = changed_weight/total_weight)
+
+dat_text <- data.frame(
+  label = "No Republican respondent\nonly attended Grade School.",
+  file_party = "Republican",
+  x = "Grade school",
+  y = 0
+)
+
+bind_rows(dem_change, rep_change) %>% 
+  select(educ, file_party, changed_portion) %>% 
+  ungroup() %>% 
+  mutate(educ = factor(educ, levels = c("Grade school", "High school", "Some college or trade school", "Bachelors' degree", "Graduate or Professional Degree"))) %>% 
+  ggplot(aes(x = educ, y = changed_portion, fill = file_party)) +
+    geom_col() +
+    scale_fill_manual(values = c("blue", "red"),
+                      breaks = c("Democratic", "Republican")) +
+    coord_flip() +
+    facet_grid(~ file_party) +
+    labs(x = NULL,
+         y = "Percentage",
+         title = "Portion of Party Members Not Voting for Their Own Party",
+         caption = "New York Times Upshot/Siena College 2018 live polls") +
+    guides(fill = FALSE) +
+    geom_text(data = dat_text, mapping = aes(x = x, y = y, label = label, hjust = 0))
+
+```
+
+
 # Collaborators
-Neil Khruana
+Neil.
